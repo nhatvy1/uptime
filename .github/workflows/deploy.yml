@@ -40,51 +40,48 @@ jobs:
 
     steps:
       - name: Deploy via SSH
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+    run: |
+      mkdir -p ~/.ssh
+      chmod 700 ~/.ssh
 
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+      printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+      chmod 600 ~/.ssh/id_ed25519
 
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+      printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      chmod 600 ~/.ssh/known_hosts
 
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+      ssh -i ~/.ssh/id_ed25519 \
+        -o IdentitiesOnly=yes \
+        -o StrictHostKeyChecking=yes \
+        "$VPS_USER@$VPS_HOST" 'bash -se' <<'EOF'
+          set -e
 
-          ssh -i ~/.ssh/id_ed25519 \
-            -o StrictHostKeyChecking=yes \
-            "$VPS_USER@$VPS_HOST" 'bash -se' <<'EOF'
-              set -e
+          # Load NVM
+          export NVM_DIR="$HOME/.nvm"
+          source "$NVM_DIR/nvm.sh"
+          nvm use 26
 
-              cd /home/foxy/apps/uptime
+          echo "Node: $(node -v)"
+          echo "NPM: $(npm -v)"
 
-              echo "Pulling latest code..."
-              git fetch origin main
-              git reset --hard origin/main
+          cd /home/foxy/apps/uptime
 
-              echo "Installing dependencies..."
-              npm ci
+          echo "Pulling latest code..."
+          git fetch origin main
+          git reset --hard origin/main
 
-              echo "Building NestJS..."
-              npm run build
+          echo "Installing dependencies..."
+          npm ci
 
-              echo "Running migrations..."
-              npm run migration:run
+          echo "Building..."
+          npm run build
 
-              echo "Pruning dev dependencies..."
-              npm prune --omit=dev
-
-              echo "Reloading PM2..."
-              pm2 startOrReload ecosystem.config.js \
-                --env production \
-                --update-env
-
-              pm2 save
-
-              echo "Deployment completed!"
-          EOF
+          echo "Restarting PM2..."
+          pm2 startOrReload ecosystem.config.js --env production --update-env
+          pm2 save
+      EOF
