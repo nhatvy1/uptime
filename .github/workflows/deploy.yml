@@ -9,84 +9,82 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-  steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@4
-      with:
-        node-version: '26'
-        cache: 'npm'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Lint code
-      run: npm run lint
+      - name: Lint code
+        run: npm run lint
 
-    - name: Run tests
-      run: npm run test:ci
+      - name: Run tests
+        run: npm run test:ci
 
-  
-deploy:
-  name: Deploy to Production
-  needs: test
+  deploy:
+    name: Deploy to Production
+    needs: build
 
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-  runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-  environment: production
+    environment: production
 
-  steps:
-    - name: Deploy via SSH
-      env:
-        VPS_HOST: ${{ secrets.VPS_HOST }}
-        VPS_USER: ${{ secrets.VPS_USER }}
-        VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-        VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+    steps:
+      - name: Deploy via SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
 
-      run: |
-        mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
-        printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
-        printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-        chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-        ssh -i ~/.ssh/id_ed25519 \
-          -o StrictHostKeyChecking=yes \
-          "$VPS_USER@$VPS_HOST" 'bash -se' <<'EOF'
-            set -e
+          ssh -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" 'bash -se' <<'EOF'
+              set -e
 
-            cd /home/foxy/apps/uptime
+              cd /home/foxy/apps/uptime
 
-            echo "Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
+              echo "Pulling latest code..."
+              git fetch origin main
+              git reset --hard origin/main
 
-            echo "Installing dependencies..."
-            npm ci
+              echo "Installing dependencies..."
+              npm ci
 
-            echo "Building NestJS..."
-            npm run build
+              echo "Building NestJS..."
+              npm run build
 
-            echo "Running migrations..."
-            npm run migration:run
+              echo "Running migrations..."
+              npm run migration:run
 
-            echo "Pruning dev dependencies..."
-            npm prune --omit=dev
+              echo "Pruning dev dependencies..."
+              npm prune --omit=dev
 
-            echo "Reloading PM2..."
-            pm2 startOrReload ecosystem.config.js \
-              --env production \
-              --update-env
+              echo "Reloading PM2..."
+              pm2 startOrReload ecosystem.config.js \
+                --env production \
+                --update-env
 
-            pm2 save
+              pm2 save
 
-            echo "Deployment completed!"
-        EOF
-
+              echo "Deployment completed!"
+          EOF
