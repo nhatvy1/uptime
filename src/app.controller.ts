@@ -16,6 +16,9 @@ export class AppController {
 
   @Get('/health')
   healthCheck() {
-    return { status: 'ok', envFileTest: this.configService.get('port') };
+    return {
+      status: 'ok',
+      envFileTest: parseInt(this.configService.get('port') ?? '', 10) || 4000,
+    };
   }
 }
