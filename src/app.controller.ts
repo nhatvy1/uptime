@@ -19,7 +19,7 @@ export class AppController {
     return {
       status: 'ok',
       envFileTest: parseInt(this.configService.get('port') ?? '', 10) || 4000,
-      db: this.configService.get('TEST_DATABASE_URL') || '',
+      db: this.configService.get<string | undefined>('TEST_DATABASE_URL'),
     };
   }
 }
